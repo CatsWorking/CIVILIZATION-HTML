@@ -3,21 +3,19 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Full-Screen Pixel City</title>
+<title>Full-Screen Pixel City Fixed</title>
 <style>
   body {
     margin: 0;
     overflow: hidden;
     font-family: monospace;
-    background: #87ceeb; /* sky */
+    background: #87ceeb;
   }
 
   #city {
     position: relative;
     width: 100vw;
     height: 100vh;
-    perspective: 1000px;
-    transform-style: preserve-3d;
   }
 
   .pixel {
@@ -27,50 +25,13 @@
     image-rendering: pixelated;
   }
 
-  .building {
-    background-color: #555;
-  }
-
-  .window {
-    background-color: #fffa88;
-  }
-
-  .street {
-    background-color: #333;
-  }
-
-  .car {
-    width: 12px;
-    height: 6px;
-    border-radius: 2px;
-    position: absolute;
-  }
-
-  .tree {
-    background-color: #0a5;
-    width: 8px;
-    height: 12px;
-    border-radius: 50%;
-    position: absolute;
-  }
-
-  .light {
-    background-color: yellow;
-    width: 4px;
-    height: 8px;
-    border-radius: 2px;
-    position: absolute;
-    box-shadow: 0 0 8px yellow;
-  }
-
-  .smoke {
-    background-color: #ccc;
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    position: absolute;
-    opacity: 0.7;
-  }
+  .building { background-color: #555; }
+  .window { background-color: #fffa88; }
+  .street { background-color: #333; }
+  .car { width: 12px; height: 6px; border-radius: 2px; position: absolute; }
+  .tree { background-color: #0a5; width: 8px; height: 12px; border-radius: 50%; position: absolute; }
+  .light { background-color: yellow; width: 4px; height: 8px; border-radius: 2px; position: absolute; box-shadow: 0 0 8px yellow; }
+  .smoke { background-color: #ccc; width: 6px; height: 6px; border-radius: 50%; position: absolute; opacity: 0.7; }
 </style>
 </head>
 <body>
@@ -80,26 +41,27 @@
 const city = document.getElementById('city');
 const cityWidth = window.innerWidth;
 const cityHeight = window.innerHeight;
+
 const grid = 16;
+const cols = 50; // number of city blocks horizontally
+const rows = 50; // number of city blocks vertically
 
-// Scale the city to cover the whole screen
-const cols = Math.floor(cityWidth / (grid/2));
-const rows = Math.floor(cityHeight / (grid/4) * 1.5); // stretch for isometric
-
-// Isometric conversion
+// Isometric conversion scaled to fit screen
 function iso(x, y) {
-  const isoX = (x - y) * grid/2 + cityWidth/2;
-  const isoY = (x + y) * grid/4;
+  const scaleX = cityWidth / (cols + rows);
+  const scaleY = cityHeight / (cols + rows) / 2;
+  const isoX = (x - y) * scaleX + cityWidth/2;
+  const isoY = (x + y) * scaleY;
   return {x: isoX, y: isoY};
 }
 
-// Random color for buildings
+// Random building color
 function randomColor() {
-  const colors = ['#555', '#777', '#999', '#aa5555', '#55aaaa'];
+  const colors = ['#555','#777','#999','#aa5555','#55aaaa'];
   return colors[Math.floor(Math.random() * colors.length)];
 }
 
-// Generate buildings with windows and smoke
+// Generate buildings
 function generateBuildings() {
   for (let i = 0; i < cols; i++) {
     for (let j = 0; j < rows; j++) {
@@ -115,14 +77,14 @@ function generateBuildings() {
         city.appendChild(pixel);
 
         if (Math.random() > 0.6) {
-          const windowPixel = document.createElement('div');
-          windowPixel.classList.add('pixel', 'window');
-          windowPixel.style.left = `${x}px`;
-          windowPixel.style.top = `${y - h*grid/2}px`;
-          city.appendChild(windowPixel);
+          const win = document.createElement('div');
+          win.classList.add('pixel','window');
+          win.style.left = `${x}px`;
+          win.style.top = `${y - h*grid/2}px`;
+          city.appendChild(win);
         }
       }
-
+      // Chimney smoke
       if (Math.random() > 0.8) {
         const smoke = document.createElement('div');
         smoke.classList.add('smoke');
@@ -142,7 +104,7 @@ function generateStreets() {
       if (i % 5 === 0 || j % 5 === 0) {
         const {x, y} = iso(i, j);
         const street = document.createElement('div');
-        street.classList.add('pixel', 'street');
+        street.classList.add('pixel','street');
         street.style.left = `${x}px`;
         street.style.top = `${y}px`;
         city.appendChild(street);
@@ -159,12 +121,12 @@ function generateStreets() {
   }
 }
 
-// Generate trees
-function generateTrees() {
-  for (let t = 0; t < 150; t++) {
-    const i = Math.floor(Math.random() * cols);
-    const j = Math.floor(Math.random() * rows);
-    const {x, y} = iso(i, j);
+// Trees
+function generateTrees(n=200) {
+  for (let t=0; t<n; t++) {
+    const i = Math.floor(Math.random()*cols);
+    const j = Math.floor(Math.random()*rows);
+    const {x, y} = iso(i,j);
     const tree = document.createElement('div');
     tree.classList.add('tree');
     tree.style.left = `${x}px`;
@@ -175,12 +137,12 @@ function generateTrees() {
 
 // Cars
 const cars = [];
-function spawnCars(n=30) {
-  for (let i = 0; i < n; i++) {
+function spawnCars(n=30){
+  for(let i=0;i<n;i++){
     const car = document.createElement('div');
     car.classList.add('car');
     car.style.backgroundColor = `hsl(${Math.random()*360}, 80%, 60%)`;
-    const {x, y} = iso(-Math.random()*50, rows/2);
+    const {x,y} = iso(-Math.random()*cols, rows/2);
     car.style.left = `${x}px`;
     car.style.top = `${y}px`;
     car.vx = 0.5 + Math.random();
@@ -191,50 +153,39 @@ function spawnCars(n=30) {
 }
 
 // Animate cars
-function animateCars() {
-  cars.forEach(car => {
-    let left = parseFloat(car.style.left) + car.vx;
-    let top = parseFloat(car.style.top) + car.vy;
-    if (left > cityWidth + 50 || top > cityHeight + 50) {
-      left = -50;
-      top = cityHeight/4;
+function animateCars(){
+  cars.forEach(car=>{
+    let left = parseFloat(car.style.left)+car.vx;
+    let top = parseFloat(car.style.top)+car.vy;
+    if(left>cityWidth+50||top>cityHeight+50){
+      left=-50; top=cityHeight/4;
     }
-    car.style.left = `${left}px`;
-    car.style.top = `${top}px`;
+    car.style.left=`${left}px`;
+    car.style.top=`${top}px`;
   });
   requestAnimationFrame(animateCars);
 }
 
 // Animate smoke
-function animateSmoke(smoke) {
-  let y = parseFloat(smoke.style.top);
-  let opacity = 0.7;
-  function rise() {
-    y -= 0.3;
-    opacity -= 0.01;
-    if (opacity <= 0) {
-      y = parseFloat(smoke.style.top) + 20;
-      opacity = 0.7;
-    }
-    smoke.style.top = `${y}px`;
-    smoke.style.opacity = opacity;
+function animateSmoke(smoke){
+  let y=parseFloat(smoke.style.top);
+  let opacity=0.7;
+  function rise(){
+    y-=0.3; opacity-=0.01;
+    if(opacity<=0){ y=parseFloat(smoke.style.top)+20; opacity=0.7; }
+    smoke.style.top=`${y}px`;
+    smoke.style.opacity=opacity;
     requestAnimationFrame(rise);
   }
   rise();
 }
 
-// Day-Night Cycle
-let hue = 197; // sky blue
-let day = true;
-function animateSky() {
-  if (day) {
-    hue += 0.05;
-    if (hue >= 260) day = false; // sunset
-  } else {
-    hue -= 0.05;
-    if (hue <= 197) day = true; // sunrise
-  }
-  document.body.style.background = `hsl(${hue}, 80%, 70%)`;
+// Day-night cycle
+let hue=197; let day=true;
+function animateSky(){
+  if(day){ hue+=0.05; if(hue>=260) day=false; }
+  else{ hue-=0.05; if(hue<=197) day=true; }
+  document.body.style.background=`hsl(${hue},80%,70%)`;
   requestAnimationFrame(animateSky);
 }
 
