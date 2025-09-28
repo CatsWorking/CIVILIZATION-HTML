@@ -1,3 +1,3 @@
-# build-a-gun
+# CIVILIZATION HTML
 
-this was made as a small test thing to see what i can do with html and js
+What is CIVILIZATION: HTML?
