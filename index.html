@@ -17,41 +17,42 @@
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 
-// Map settings
-const TILE_SIZE = 10;
-const MAP_WIDTH = canvas.width / TILE_SIZE;
-const MAP_HEIGHT = canvas.height / TILE_SIZE;
+const TILE_SIZE = 20;
+const MAP_ROWS = 30;
+const MAP_COLS = 40;
 
+// Tile types
+// 0 = wall (#000000)
+// 1 = walkable (#c3c3c3)
+// 2 = Disassembly spawn (#ff7f27)
+// 3 = Reassembly spawn (#fff200)
 const TILE_COLORS = {
-    spawnDisassembly: '#ff7f27',
-    spawnReassembly: '#fff200',
-    walkable: ['#ff7f27', '#fff200', '#c3c3c3'],
-    wall: '#000000'
+  0:'#000000',
+  1:'#c3c3c3',
+  2:'#ff7f27',
+  3:'#fff200'
 };
 
-// Procedural map array
-let mapGrid = [];
+// Structured CS-style map
+const mapGrid = [
+  [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+  [0,2,2,2,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,2,2,2,0,0],
+  [0,2,2,2,1,0,0,0,0,0,1,0,0,0,0,1,0,0,0,0,0,0,1,1,0,1,1,1,1,1,1,0,0,1,1,2,2,2,0,0],
+  [0,1,1,1,1,0,1,1,1,0,1,0,1,1,0,1,0,1,1,0,0,0,1,1,0,1,0,0,0,1,1,0,0,1,1,1,1,1,1,0],
+  [0,1,0,0,0,0,1,0,1,0,1,0,1,0,0,1,0,1,0,0,0,0,1,0,0,1,0,0,0,0,1,0,0,0,0,0,0,1,0,0],
+  [0,1,1,1,1,1,1,0,1,1,1,0,1,1,1,1,0,1,1,1,1,0,1,1,1,1,0,1,1,1,1,0,1,1,1,1,1,1,1,0],
+  [0,0,0,0,0,0,1,0,0,0,1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,0,0,0,0,0],
+  [0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0],
+  [0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0],
+  [0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0],
+  // middle rows mostly walkable corridor
+  ...Array(18).fill(Array(40).fill(1)),
+  // Reassembly spawn bottom
+  [0,3,3,3,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,3,3,3,0,0],
+  [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+];
 
-// Generate map
-function generateMap() {
-    for(let y=0;y<MAP_HEIGHT;y++){
-        mapGrid[y]=[];
-        for(let x=0;x<MAP_WIDTH;x++){
-            const rand=Math.random();
-            if(rand<0.1) mapGrid[y][x]=TILE_COLORS.spawnDisassembly;
-            else if(rand<0.2) mapGrid[y][x]=TILE_COLORS.spawnReassembly;
-            else if(rand<0.7) mapGrid[y][x]='#c3c3c3';
-            else mapGrid[y][x]=TILE_COLORS.wall;
-        }
-    }
-}
-
-// Player & bot settings
-const PLAYER_SIZE = TILE_SIZE/2;
-const FOV_ANGLE = Math.PI/2; // 90 degrees
-const ROUND_TIME = 150; // seconds
-
-// Entity constructor
+// Entity & weapon setup
 class Entity {
     constructor(x, y, team, color, isBot=false) {
         this.x = x;
@@ -66,33 +67,23 @@ class Entity {
     }
 }
 
-// Weapons
 const weapons = [
     {name:'Shotgun', fireRate:2, pellets:5, damage:10, automatic:false},
     {name:'Pistol', fireRate:10, pellets:1, damage:30, automatic:false},
     {name:'SMG', fireRate:30, pellets:1, damage:5, automatic:true}
 ];
 
-// Game state
 let player=null;
 let bots=[];
 let bullets=[];
 let splashes=[];
 let keys={};
 let mouse={x:0,y:0};
-let roundTimer=ROUND_TIME;
+let roundTimer=150;
 let roundActive=false;
 let lastTime=0;
 
-// Map walkability
-function isWalkable(x,y){
-    const ix=Math.floor(x/TILE_SIZE);
-    const iy=Math.floor(y/TILE_SIZE);
-    if(ix<0||iy<0||ix>=MAP_WIDTH||iy>=MAP_HEIGHT) return false;
-    return TILE_COLORS.walkable.includes(mapGrid[iy][ix]);
-}
-
-// Input
+// Input handling
 window.addEventListener('keydown',e=>keys[e.key.toLowerCase()]=true);
 window.addEventListener('keyup',e=>keys[e.key.toLowerCase()]=false);
 canvas.addEventListener('mousemove',e=>{
@@ -106,43 +97,12 @@ window.addEventListener('keypress',e=>{
     }
 });
 
-// Initialize game
-function initGame() {
-    generateMap();
-
-    // Find spawn points
-    const spawnPointsDis=[];
-    const spawnPointsRea=[];
-    for(let y=0;y<MAP_HEIGHT;y++){
-        for(let x=0;x<MAP_WIDTH;x++){
-            if(mapGrid[y][x]===TILE_COLORS.spawnDisassembly) spawnPointsDis.push({x:x*TILE_SIZE+TILE_SIZE/2, y:y*TILE_SIZE+TILE_SIZE/2});
-            if(mapGrid[y][x]===TILE_COLORS.spawnReassembly) spawnPointsRea.push({x:x*TILE_SIZE+TILE_SIZE/2, y:y*TILE_SIZE+TILE_SIZE/2});
-        }
-    }
-
-    // Spawn player on random Reassembly tile
-    const pSpawn = spawnPointsRea[Math.floor(Math.random()*spawnPointsRea.length)];
-    player = new Entity(pSpawn.x,pSpawn.y,'Reassembly',TILE_COLORS.spawnReassembly,false);
-    document.getElementById('teamInfo').textContent = `YOU ARE ON TEAM ${player.team}!`;
-
-    // Spawn bots
-    for(let i=0;i<6;i++){
-        let bSpawn, team, color;
-        if(i<3){
-            team='Disassembly';
-            color=TILE_COLORS.spawnDisassembly;
-            bSpawn=spawnPointsDis[Math.floor(Math.random()*spawnPointsDis.length)];
-        } else {
-            team='Reassembly';
-            color=TILE_COLORS.spawnReassembly;
-            bSpawn=spawnPointsRea[Math.floor(Math.random()*spawnPointsRea.length)];
-        }
-        bots.push(new Entity(bSpawn.x,bSpawn.y,team,color,true));
-    }
-
-    roundActive = true;
-    lastTime = performance.now();
-    requestAnimationFrame(gameLoop);
+// Check walkable
+function isWalkable(x,y){
+    const ix=Math.floor(x/TILE_SIZE);
+    const iy=Math.floor(y/TILE_SIZE);
+    if(ix<0||iy<0||ix>=MAP_COLS||iy>=MAP_ROWS) return false;
+    return mapGrid[iy][ix]!==0;
 }
 
 // Shooting
@@ -157,17 +117,14 @@ function shoot(entity){
     entity.weaponCooldown = 1/weapon.fireRate;
 }
 
-// --- A* Pathfinding for bots ---
+// A* Pathfinding
 function findPath(startX, startY, goalX, goalY) {
-    const cols = MAP_WIDTH;
-    const rows = MAP_HEIGHT;
-
+    const cols = MAP_COLS;
+    const rows = MAP_ROWS;
     function nodeKey(x,y){return x+","+y;}
     function heuristic(x1,y1,x2,y2){return Math.abs(x1-x2)+Math.abs(y1-y2);}
-
     const openSet = [{x:startX, y:startY, g:0, h:heuristic(startX,startY,goalX,goalY), parent:null}];
     const closedSet = new Set();
-
     while(openSet.length>0){
         openSet.sort((a,b)=> (a.g+a.h)-(b.g+b.h));
         const current = openSet.shift();
@@ -183,7 +140,7 @@ function findPath(startX, startY, goalX, goalY) {
         for(let d of dirs){
             const nx=current.x+d[0], ny=current.y+d[1];
             if(nx<0||ny<0||nx>=cols||ny>=rows) continue;
-            if(!TILE_COLORS.walkable.includes(mapGrid[ny][nx])) continue;
+            if(!isWalkable(nx*TILE_SIZE,ny*TILE_SIZE)) continue;
             if(closedSet.has(nodeKey(nx,ny))) continue;
             const gNew = current.g + 1;
             const hNew = heuristic(nx,ny,goalX,goalY);
@@ -193,21 +150,19 @@ function findPath(startX, startY, goalX, goalY) {
     return [];
 }
 
-// --- Bot AI ---
+// Bot AI
 function botThink(bot,dt){
     const speed = 50*dt;
     const tileX = Math.floor(bot.x/TILE_SIZE);
     const tileY = Math.floor(bot.y/TILE_SIZE);
 
-    // Find visible enemies
     const visible=[];
     const entities=[player,...bots];
     entities.forEach(ent=>{
         if(ent===bot || ent.team===bot.team || ent.health<=0) return;
         const dx = ent.x - bot.x;
         const dy = ent.y - bot.y;
-        const dist = Math.hypot(dx,dy);
-        if(dist<150) visible.push(ent);
+        if(Math.hypot(dx,dy)<150) visible.push(ent);
     });
 
     let target = null;
@@ -232,7 +187,6 @@ function botThink(bot,dt){
             if(isWalkable(bot.x+vx, bot.y)) bot.x += vx;
             if(isWalkable(bot.x, bot.y+vy)) bot.y += vy;
         }
-        // Shoot if enemy in visible list
         if(bot.weaponCooldown<=0 && visible.includes(target)) shoot(bot);
         if(bot.lastSeenPos && Math.hypot(bot.x-bot.lastSeenPos.x, bot.y-bot.lastSeenPos.y)<5) bot.lastSeenPos=null;
     } else {
@@ -242,8 +196,41 @@ function botThink(bot,dt){
         if(isWalkable(bot.x+vx, bot.y)) bot.x+=vx;
         if(isWalkable(bot.x, bot.y+vy)) bot.y+=vy;
     }
-
     if(bot.weaponCooldown>0) bot.weaponCooldown-=dt;
+}
+
+// Initialize
+function initGame() {
+    const spawnPointsDis=[];
+    const spawnPointsRea=[];
+    for(let y=0;y<MAP_ROWS;y++){
+        for(let x=0;x<MAP_COLS;x++){
+            if(mapGrid[y][x]===2) spawnPointsDis.push({x:x*TILE_SIZE+TILE_SIZE/2, y:y*TILE_SIZE+TILE_SIZE/2});
+            if(mapGrid[y][x]===3) spawnPointsRea.push({x:x*TILE_SIZE+TILE_SIZE/2, y:y*TILE_SIZE+TILE_SIZE/2});
+        }
+    }
+
+    const pSpawn = spawnPointsRea[Math.floor(Math.random()*spawnPointsRea.length)];
+    player = new Entity(pSpawn.x,pSpawn.y,'Reassembly',TILE_COLORS[3],false);
+    document.getElementById('teamInfo').textContent = `YOU ARE ON TEAM ${player.team}!`;
+
+    for(let i=0;i<6;i++){
+        let bSpawn, team, color;
+        if(i<3){
+            team='Disassembly';
+            color=TILE_COLORS[2];
+            bSpawn=spawnPointsDis[Math.floor(Math.random()*spawnPointsDis.length)];
+        } else {
+            team='Reassembly';
+            color=TILE_COLORS[3];
+            bSpawn=spawnPointsRea[Math.floor(Math.random()*spawnPointsRea.length)];
+        }
+        bots.push(new Entity(bSpawn.x,bSpawn.y,team,color,true));
+    }
+
+    roundActive = true;
+    lastTime = performance.now();
+    requestAnimationFrame(gameLoop);
 }
 
 // Game Loop
@@ -305,15 +292,13 @@ function update(dt){
 
 // Render
 function render(){
-    // Draw map
-    for(let y=0;y<MAP_HEIGHT;y++){
-        for(let x=0;x<MAP_WIDTH;x++){
-            ctx.fillStyle = mapGrid[y][x];
+    for(let y=0;y<MAP_ROWS;y++){
+        for(let x=0;x<MAP_COLS;x++){
+            ctx.fillStyle = TILE_COLORS[mapGrid[y][x]];
             ctx.fillRect(x*TILE_SIZE, y*TILE_SIZE, TILE_SIZE, TILE_SIZE);
         }
     }
 
-    // Draw entities
     [player,...bots].forEach(e=>{
         if(e.health<=0) return;
         ctx.fillStyle=e.color;
@@ -326,13 +311,12 @@ function render(){
             ctx.beginPath();
             const angle=Math.atan2(mouse.y-e.y,mouse.x-e.x);
             ctx.moveTo(e.x,e.y);
-            ctx.arc(e.x,e.y,100,angle-FOV_ANGLE/2,angle+FOV_ANGLE/2);
+            ctx.arc(e.x,e.y,100,angle-Math.PI/4,angle+Math.PI/4);
             ctx.closePath();
             ctx.fill();
         }
     });
 
-    // Draw bullets
     ctx.strokeStyle='orange';
     bullets.forEach(b=>{
         ctx.beginPath();
@@ -341,7 +325,6 @@ function render(){
         ctx.stroke();
     });
 
-    // Draw splashes
     ctx.fillStyle='red';
     splashes.forEach(s=>{
         ctx.globalAlpha = 1 - s.time/2;
@@ -351,12 +334,11 @@ function render(){
         ctx.globalAlpha = 1;
     });
 
-    // Draw round timer
     ctx.fillStyle='white';
     ctx.fillText(`Time Left: ${Math.floor(roundTimer)}s`, 10, 20);
 }
 
-// Start game
+// Start
 initGame();
 </script>
 </body>
