@@ -17,9 +17,10 @@
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 
-// Load map
-const mapImg = new Image();
-mapImg.src = 'rd_donut.png';
+// Map settings
+const TILE_SIZE = 10;
+const MAP_WIDTH = canvas.width / TILE_SIZE;
+const MAP_HEIGHT = canvas.height / TILE_SIZE;
 
 const TILE_COLORS = {
     spawnDisassembly: '#ff7f27',
@@ -28,11 +29,27 @@ const TILE_COLORS = {
     wall: '#000000'
 };
 
-const PLAYER_SIZE = 10;
-const FOV_ANGLE = Math.PI / 2; // 90 degrees
-const ROUND_TIME = 150; // 2:30 in seconds
+// Procedural map array
+let mapGrid = [];
 
-let mapData = null;
+// Generate map
+function generateMap() {
+    for(let y=0;y<MAP_HEIGHT;y++){
+        mapGrid[y]=[];
+        for(let x=0;x<MAP_WIDTH;x++){
+            const rand=Math.random();
+            if(rand<0.1) mapGrid[y][x]=TILE_COLORS.spawnDisassembly;
+            else if(rand<0.2) mapGrid[y][x]=TILE_COLORS.spawnReassembly;
+            else if(rand<0.7) mapGrid[y][x]='#c3c3c3';
+            else mapGrid[y][x]=TILE_COLORS.wall;
+        }
+    }
+}
+
+// Player & bot settings
+const PLAYER_SIZE = TILE_SIZE/2;
+const FOV_ANGLE = Math.PI/2; // 90 degrees
+const ROUND_TIME = 150; // seconds
 
 // Entity constructor
 class Entity {
@@ -45,7 +62,6 @@ class Entity {
         this.health = 100;
         this.weaponIndex = 0;
         this.weaponCooldown = 0;
-        this.target = null;
         this.lastSeenPos = null;
     }
 }
@@ -58,56 +74,55 @@ const weapons = [
 ];
 
 // Game state
-let player = null;
-let bots = [];
-let bullets = [];
-let splashes = [];
-let keys = {};
-let mouse = {x:0, y:0};
-let roundTimer = ROUND_TIME;
-let roundActive = false;
-let lastTime = 0;
+let player=null;
+let bots=[];
+let bullets=[];
+let splashes=[];
+let keys={};
+let mouse={x:0,y:0};
+let roundTimer=ROUND_TIME;
+let roundActive=false;
+let lastTime=0;
 
-// Utility
-function hexToRgb(hex) {
-    const r = parseInt(hex.slice(1,3),16);
-    const g = parseInt(hex.slice(3,5),16);
-    const b = parseInt(hex.slice(5,7),16);
-    return {r,g,b};
+// Map walkability
+function isWalkable(x,y){
+    const ix=Math.floor(x/TILE_SIZE);
+    const iy=Math.floor(y/TILE_SIZE);
+    if(ix<0||iy<0||ix>=MAP_WIDTH||iy>=MAP_HEIGHT) return false;
+    return TILE_COLORS.walkable.includes(mapGrid[iy][ix]);
 }
 
-// Load map pixels
-mapImg.onload = function(){
-    const tmpCanvas = document.createElement('canvas');
-    tmpCanvas.width = mapImg.width;
-    tmpCanvas.height = mapImg.height;
-    const tmpCtx = tmpCanvas.getContext('2d');
-    tmpCtx.drawImage(mapImg,0,0);
-    mapData = tmpCtx.getImageData(0,0,mapImg.width,mapImg.height);
-    initGame();
-};
+// Input
+window.addEventListener('keydown',e=>keys[e.key.toLowerCase()]=true);
+window.addEventListener('keyup',e=>keys[e.key.toLowerCase()]=false);
+canvas.addEventListener('mousemove',e=>{
+    const rect = canvas.getBoundingClientRect();
+    mouse.x = e.clientX - rect.left;
+    mouse.y = e.clientY - rect.top;
+});
+window.addEventListener('keypress',e=>{
+    if(e.key.toLowerCase()==='q'){
+        player.weaponIndex = (player.weaponIndex+1)%weapons.length;
+    }
+});
 
 // Initialize game
 function initGame() {
+    generateMap();
+
     // Find spawn points
-    const spawnPointsDis = [];
-    const spawnPointsRea = [];
-    for(let y=0;y<mapImg.height;y++){
-        for(let x=0;x<mapImg.width;x++){
-            const idx = (y*mapImg.width + x)*4;
-            const r = mapData.data[idx];
-            const g = mapData.data[idx+1];
-            const b = mapData.data[idx+2];
-            const hex = rgbToHex(r,g,b);
-            if(hex === TILE_COLORS.spawnDisassembly) spawnPointsDis.push({x,y});
-            if(hex === TILE_COLORS.spawnReassembly) spawnPointsRea.push({x,y});
+    const spawnPointsDis=[];
+    const spawnPointsRea=[];
+    for(let y=0;y<MAP_HEIGHT;y++){
+        for(let x=0;x<MAP_WIDTH;x++){
+            if(mapGrid[y][x]===TILE_COLORS.spawnDisassembly) spawnPointsDis.push({x:x*TILE_SIZE+TILE_SIZE/2, y:y*TILE_SIZE+TILE_SIZE/2});
+            if(mapGrid[y][x]===TILE_COLORS.spawnReassembly) spawnPointsRea.push({x:x*TILE_SIZE+TILE_SIZE/2, y:y*TILE_SIZE+TILE_SIZE/2});
         }
     }
 
     // Spawn player on random Reassembly tile
     const pSpawn = spawnPointsRea[Math.floor(Math.random()*spawnPointsRea.length)];
     player = new Entity(pSpawn.x,pSpawn.y,'Reassembly',TILE_COLORS.spawnReassembly,false);
-
     document.getElementById('teamInfo').textContent = `YOU ARE ON TEAM ${player.team}!`;
 
     // Spawn bots
@@ -130,37 +145,106 @@ function initGame() {
     requestAnimationFrame(gameLoop);
 }
 
-// Convert RGB to hex
-function rgbToHex(r,g,b){
-    return "#" + ((1 << 24) + (r <<16) + (g<<8) + b).toString(16).slice(1);
-}
-
-// Movement & collision
-function isWalkable(x,y){
-    const ix = Math.floor(x);
-    const iy = Math.floor(y);
-    if(ix<0 || iy<0 || ix>=mapImg.width || iy>=mapImg.height) return false;
-    const idx = (iy*mapImg.width + ix)*4;
-    const r = mapData.data[idx];
-    const g = mapData.data[idx+1];
-    const b = mapData.data[idx+2];
-    const hex = rgbToHex(r,g,b);
-    return TILE_COLORS.walkable.includes(hex);
-}
-
-// Input
-window.addEventListener('keydown',e=>keys[e.key.toLowerCase()]=true);
-window.addEventListener('keyup',e=>keys[e.key.toLowerCase()]=false);
-canvas.addEventListener('mousemove',e=>{
-    const rect = canvas.getBoundingClientRect();
-    mouse.x = e.clientX - rect.left;
-    mouse.y = e.clientY - rect.top;
-});
-window.addEventListener('keypress',e=>{
-    if(e.key.toLowerCase()==='q'){
-        player.weaponIndex = (player.weaponIndex+1)%weapons.length;
+// Shooting
+function shoot(entity){
+    const weapon = weapons[entity.weaponIndex];
+    if(entity.weaponCooldown>0) return;
+    const angle = entity.isBot && entity.lastSeenPos ? Math.atan2(entity.lastSeenPos.y-entity.y, entity.lastSeenPos.x-entity.x) : Math.atan2(mouse.y-entity.y, mouse.x-entity.x);
+    for(let i=0;i<weapon.pellets;i++){
+        const spread=(Math.random()-0.5)*0.2;
+        bullets.push({x:entity.x,y:entity.y,vx:Math.cos(angle+spread)*200,vy:Math.sin(angle+spread)*200,damage:weapon.damage,owner:entity});
     }
-});
+    entity.weaponCooldown = 1/weapon.fireRate;
+}
+
+// --- A* Pathfinding for bots ---
+function findPath(startX, startY, goalX, goalY) {
+    const cols = MAP_WIDTH;
+    const rows = MAP_HEIGHT;
+
+    function nodeKey(x,y){return x+","+y;}
+    function heuristic(x1,y1,x2,y2){return Math.abs(x1-x2)+Math.abs(y1-y2);}
+
+    const openSet = [{x:startX, y:startY, g:0, h:heuristic(startX,startY,goalX,goalY), parent:null}];
+    const closedSet = new Set();
+
+    while(openSet.length>0){
+        openSet.sort((a,b)=> (a.g+a.h)-(b.g+b.h));
+        const current = openSet.shift();
+        if(current.x === goalX && current.y === goalY){
+            const path=[];
+            let c=current;
+            while(c.parent){path.push({x:c.x, y:c.y}); c=c.parent;}
+            path.reverse();
+            return path;
+        }
+        closedSet.add(nodeKey(current.x,current.y));
+        const dirs=[[0,1],[1,0],[0,-1],[-1,0]];
+        for(let d of dirs){
+            const nx=current.x+d[0], ny=current.y+d[1];
+            if(nx<0||ny<0||nx>=cols||ny>=rows) continue;
+            if(!TILE_COLORS.walkable.includes(mapGrid[ny][nx])) continue;
+            if(closedSet.has(nodeKey(nx,ny))) continue;
+            const gNew = current.g + 1;
+            const hNew = heuristic(nx,ny,goalX,goalY);
+            openSet.push({x:nx, y:ny, g:gNew, h:hNew, parent:current});
+        }
+    }
+    return [];
+}
+
+// --- Bot AI ---
+function botThink(bot,dt){
+    const speed = 50*dt;
+    const tileX = Math.floor(bot.x/TILE_SIZE);
+    const tileY = Math.floor(bot.y/TILE_SIZE);
+
+    // Find visible enemies
+    const visible=[];
+    const entities=[player,...bots];
+    entities.forEach(ent=>{
+        if(ent===bot || ent.team===bot.team || ent.health<=0) return;
+        const dx = ent.x - bot.x;
+        const dy = ent.y - bot.y;
+        const dist = Math.hypot(dx,dy);
+        if(dist<150) visible.push(ent);
+    });
+
+    let target = null;
+    if(visible.length>0){
+        target = visible[0];
+        bot.lastSeenPos = {x: target.x, y: target.y};
+    } else if(bot.lastSeenPos){
+        target = {x: bot.lastSeenPos.x, y: bot.lastSeenPos.y};
+    }
+
+    if(target){
+        const goalX = Math.floor(target.x / TILE_SIZE);
+        const goalY = Math.floor(target.y / TILE_SIZE);
+        const path = findPath(tileX, tileY, goalX, goalY);
+        if(path.length>0){
+            const next = path[0];
+            const nextX = next.x*TILE_SIZE + TILE_SIZE/2;
+            const nextY = next.y*TILE_SIZE + TILE_SIZE/2;
+            const angle = Math.atan2(nextY-bot.y, nextX-bot.x);
+            const vx = Math.cos(angle)*speed;
+            const vy = Math.sin(angle)*speed;
+            if(isWalkable(bot.x+vx, bot.y)) bot.x += vx;
+            if(isWalkable(bot.x, bot.y+vy)) bot.y += vy;
+        }
+        // Shoot if enemy in visible list
+        if(bot.weaponCooldown<=0 && visible.includes(target)) shoot(bot);
+        if(bot.lastSeenPos && Math.hypot(bot.x-bot.lastSeenPos.x, bot.y-bot.lastSeenPos.y)<5) bot.lastSeenPos=null;
+    } else {
+        const dir=Math.random()*Math.PI*2;
+        const vx=Math.cos(dir)*speed;
+        const vy=Math.sin(dir)*speed;
+        if(isWalkable(bot.x+vx, bot.y)) bot.x+=vx;
+        if(isWalkable(bot.x, bot.y+vy)) bot.y+=vy;
+    }
+
+    if(bot.weaponCooldown>0) bot.weaponCooldown-=dt;
+}
 
 // Game Loop
 function gameLoop(ts){
@@ -172,9 +256,8 @@ function gameLoop(ts){
     if(roundActive) requestAnimationFrame(gameLoop);
 }
 
-// Update entities
+// Update
 function update(dt){
-    // Player movement
     const speed=60*dt;
     let dx=0,dy=0;
     if(keys['w']) dy-=speed;
@@ -184,24 +267,16 @@ function update(dt){
     if(isWalkable(player.x+dx,player.y)) player.x+=dx;
     if(isWalkable(player.x,player.y+dy)) player.y+=dy;
 
-    // Player shooting
     const weapon = weapons[player.weaponIndex];
     if(keys[' ']) shoot(player);
-
     if(player.weaponCooldown>0) player.weaponCooldown-=dt;
 
-    // Update bots
-    bots.forEach(bot=>{
-        if(bot.health<=0) return;
-        botThink(bot,dt);
-    });
+    bots.forEach(bot=>{if(bot.health>0) botThink(bot,dt);});
 
-    // Update bullets
     bullets.forEach((b,i)=>{
         b.x+=b.vx*dt;
         b.y+=b.vy*dt;
         if(!isWalkable(b.x,b.y)) bullets.splice(i,1);
-        // Hit detection
         const entities=[player,...bots];
         entities.forEach(ent=>{
             if(ent.health>0 && ent.team!==b.owner.team){
@@ -214,13 +289,11 @@ function update(dt){
         });
     });
 
-    // Update splashes
     splashes.forEach((s,i)=>{
         s.time+=dt;
         if(s.time>2) splashes.splice(i,1);
     });
 
-    // Check round end
     const teamsAlive = new Set();
     if(player.health>0) teamsAlive.add(player.team);
     bots.forEach(b=>{if(b.health>0) teamsAlive.add(b.team)});
@@ -230,63 +303,15 @@ function update(dt){
     }
 }
 
-// Bot AI
-function botThink(bot,dt){
-    const speed=50*dt;
-    // Find visible enemies
-    const visible = [];
-    const entities=[player,...bots];
-    entities.forEach(ent=>{
-        if(ent===bot || ent.team===bot.team || ent.health<=0) return;
-        const angle=Math.atan2(ent.y-bot.y,ent.x-bot.x);
-        const dist=Math.hypot(ent.x-bot.x,ent.y-bot.y);
-        const dx=Math.cos(angle), dy=Math.sin(angle);
-        if(dist<150) visible.push({entity:ent,angle,dist});
-    });
-
-    let target=null;
-    if(visible.length>0){
-        target=visible[0].entity;
-        bot.lastSeenPos={x:target.x,y:target.y};
-    } else if(bot.lastSeenPos) target={x:bot.lastSeenPos.x, y:bot.lastSeenPos.y};
-
-    if(target){
-        const angle=Math.atan2(target.y-bot.y,target.x-bot.x);
-        const vx=Math.cos(angle)*speed;
-        const vy=Math.sin(angle)*speed;
-        if(isWalkable(bot.x+vx,bot.y+vy)) bot.x+=vx;
-        if(isWalkable(bot.x,bot.y+vy)) bot.y+=vy;
-        if(bot.weaponCooldown<=0 && target.health>0) shoot(bot);
-        if(bot.lastSeenPos && Math.hypot(bot.x-bot.lastSeenPos.x,bot.y-bot.lastSeenPos.y)<5) bot.lastSeenPos=null;
-    } else {
-        // wander
-        const dir=Math.random()*Math.PI*2;
-        if(isWalkable(bot.x+Math.cos(dir)*speed,bot.y+Math.sin(dir)*speed)){
-            bot.x+=Math.cos(dir)*speed;
-            bot.y+=Math.sin(dir)*speed;
-        }
-    }
-    if(bot.weaponCooldown>0) bot.weaponCooldown-=dt;
-}
-
-// Shooting
-function shoot(entity){
-    const weapon = weapons[entity.weaponIndex];
-    if(entity.weaponCooldown>0) return;
-    const angle = entity.isBot ? Math.atan2(entity.lastSeenPos.y-entity.y, entity.lastSeenPos.x-entity.x) : Math.atan2(mouse.y-entity.y, mouse.x-entity.x);
-    for(let i=0;i<weapon.pellets;i++){
-        const spread=(Math.random()-0.5)*0.2;
-        bullets.push({x:entity.x,y:entity.y,vx:Math.cos(angle+spread)*200,vy:Math.sin(angle+spread)*200,damage:weapon.damage,owner:entity});
-    }
-    entity.weaponCooldown = 1/weapon.fireRate;
-}
-
 // Render
 function render(){
-    ctx.clearRect(0,0,canvas.width,canvas.height);
-
-    // Draw map (simplified as background)
-    ctx.drawImage(mapImg,0,0,canvas.width,canvas.height);
+    // Draw map
+    for(let y=0;y<MAP_HEIGHT;y++){
+        for(let x=0;x<MAP_WIDTH;x++){
+            ctx.fillStyle = mapGrid[y][x];
+            ctx.fillRect(x*TILE_SIZE, y*TILE_SIZE, TILE_SIZE, TILE_SIZE);
+        }
+    }
 
     // Draw entities
     [player,...bots].forEach(e=>{
@@ -296,7 +321,6 @@ function render(){
         ctx.arc(e.x,e.y,PLAYER_SIZE,0,Math.PI*2);
         ctx.fill();
 
-        // FOV cone for player
         if(!e.isBot){
             ctx.fillStyle='rgba(255,255,255,0.2)';
             ctx.beginPath();
@@ -331,6 +355,9 @@ function render(){
     ctx.fillStyle='white';
     ctx.fillText(`Time Left: ${Math.floor(roundTimer)}s`, 10, 20);
 }
+
+// Start game
+initGame();
 </script>
 </body>
 </html>
