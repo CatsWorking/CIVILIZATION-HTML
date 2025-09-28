@@ -3,93 +3,76 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Full-Screen Pixel City Fixed</title>
+<title>Optimized Pixel City</title>
 <style>
-  body {
-    margin: 0;
-    overflow: hidden;
-    font-family: monospace;
-    background: #87ceeb;
-  }
-
-  #city {
-    position: relative;
-    width: 100vw;
-    height: 100vh;
-  }
-
-  .pixel {
-    position: absolute;
-    width: 8px;
-    height: 8px;
-    image-rendering: pixelated;
-  }
-
-  .building { background-color: #555; }
-  .window { background-color: #fffa88; }
-  .street { background-color: #333; }
-  .car { width: 12px; height: 6px; border-radius: 2px; position: absolute; }
-  .tree { background-color: #0a5; width: 8px; height: 12px; border-radius: 50%; position: absolute; }
-  .light { background-color: yellow; width: 4px; height: 8px; border-radius: 2px; position: absolute; box-shadow: 0 0 8px yellow; }
-  .smoke { background-color: #ccc; width: 6px; height: 6px; border-radius: 50%; position: absolute; opacity: 0.7; }
+  body { margin:0; overflow:hidden; background:#87ceeb; }
+  #city { position:relative; width:100vw; height:100vh; }
+  .block { position:absolute; image-rendering:pixelated; }
+  .car { width:12px; height:6px; border-radius:2px; position:absolute; }
+  .light { background:yellow; width:4px; height:8px; border-radius:2px; position:absolute; box-shadow:0 0 8px yellow; }
+  .smoke { background:#ccc; width:6px; height:6px; border-radius:50%; position:absolute; opacity:0.7; }
 </style>
 </head>
 <body>
 <div id="city"></div>
-
 <script>
 const city = document.getElementById('city');
 const cityWidth = window.innerWidth;
 const cityHeight = window.innerHeight;
-
 const grid = 16;
-const cols = 50; // number of city blocks horizontally
-const rows = 50; // number of city blocks vertically
+const cols = 50;
+const rows = 50;
 
-// Isometric conversion scaled to fit screen
-function iso(x, y) {
-  const scaleX = cityWidth / (cols + rows);
-  const scaleY = cityHeight / (cols + rows) / 2;
-  const isoX = (x - y) * scaleX + cityWidth/2;
-  const isoY = (x + y) * scaleY;
-  return {x: isoX, y: isoY};
+// Isometric conversion
+function iso(x,y){
+  const scaleX = cityWidth/(cols+rows);
+  const scaleY = cityHeight/(cols+rows)/2;
+  const isoX = (x-y)*scaleX + cityWidth/2;
+  const isoY = (x+y)*scaleY;
+  return {x:isoX, y:isoY};
 }
 
-// Random building color
-function randomColor() {
-  const colors = ['#555','#777','#999','#aa5555','#55aaaa'];
-  return colors[Math.floor(Math.random() * colors.length)];
-}
-
-// Generate buildings
-function generateBuildings() {
-  for (let i = 0; i < cols; i++) {
-    for (let j = 0; j < rows; j++) {
-      const height = Math.floor(Math.random() * 4 + 2);
-      const {x, y} = iso(i, j);
-      const color = randomColor();
-      for (let h = 0; h < height; h++) {
-        const pixel = document.createElement('div');
-        pixel.classList.add('pixel', 'building');
-        pixel.style.backgroundColor = color;
-        pixel.style.left = `${x}px`;
-        pixel.style.top = `${y - h*grid/2}px`;
-        city.appendChild(pixel);
-
-        if (Math.random() > 0.6) {
-          const win = document.createElement('div');
-          win.classList.add('pixel','window');
-          win.style.left = `${x}px`;
-          win.style.top = `${y - h*grid/2}px`;
-          city.appendChild(win);
-        }
+// Generate optimized buildings
+function generateBuildings(){
+  const cityGrid = [];
+  for(let i=0;i<cols;i++){
+    cityGrid[i]=[];
+    for(let j=0;j<rows;j++){
+      const height=Math.floor(Math.random()*4+2);
+      cityGrid[i][j] = {height, color:randomColor()};
+    }
+  }
+  // Combine vertical blocks of same color
+  for(let i=0;i<cols;i++){
+    for(let j=0;j<rows;j++){
+      const cell = cityGrid[i][j];
+      const {x,y}=iso(i,j);
+      const blockHeight = cell.height * grid/2;
+      const block = document.createElement('div');
+      block.className='block';
+      block.style.width=grid+'px';
+      block.style.height=blockHeight+'px';
+      block.style.left=`${x}px`;
+      block.style.top=`${y-blockHeight}px`;
+      block.style.backgroundColor=cell.color;
+      city.appendChild(block);
+      // Add random window as smaller overlay
+      if(Math.random()>0.6){
+        const win = document.createElement('div');
+        win.className='block';
+        win.style.width=grid+'px';
+        win.style.height=grid+'px';
+        win.style.left=`${x}px`;
+        win.style.top=`${y-blockHeight}px`;
+        win.style.backgroundColor='#fffa88';
+        city.appendChild(win);
       }
-      // Chimney smoke
-      if (Math.random() > 0.8) {
+      // Smoke
+      if(Math.random()>0.8){
         const smoke = document.createElement('div');
-        smoke.classList.add('smoke');
-        smoke.style.left = `${x}px`;
-        smoke.style.top = `${y - height*grid/2 - 6}px`;
+        smoke.className='smoke';
+        smoke.style.left=`${x}px`;
+        smoke.style.top=`${y-blockHeight-6}px`;
         city.appendChild(smoke);
         animateSmoke(smoke);
       }
@@ -97,23 +80,25 @@ function generateBuildings() {
   }
 }
 
-// Generate streets
-function generateStreets() {
-  for (let i = 0; i < cols; i++) {
-    for (let j = 0; j < rows; j++) {
-      if (i % 5 === 0 || j % 5 === 0) {
-        const {x, y} = iso(i, j);
+// Streets (combine horizontal blocks)
+function generateStreets(){
+  for(let i=0;i<cols;i++){
+    for(let j=0;j<rows;j++){
+      if(i%5===0||j%5===0){
+        const {x,y}=iso(i,j);
         const street = document.createElement('div');
-        street.classList.add('pixel','street');
-        street.style.left = `${x}px`;
-        street.style.top = `${y}px`;
+        street.className='block';
+        street.style.width=grid+'px';
+        street.style.height=grid+'px';
+        street.style.left=`${x}px`;
+        street.style.top=`${y}px`;
+        street.style.backgroundColor='#333';
         city.appendChild(street);
-
-        if (Math.random() > 0.85) {
+        if(Math.random()>0.85){
           const light = document.createElement('div');
-          light.classList.add('light');
-          light.style.left = `${x}px`;
-          light.style.top = `${y - 16}px`;
+          light.className='light';
+          light.style.left=`${x}px`;
+          light.style.top=`${y-16}px`;
           city.appendChild(light);
         }
       }
@@ -122,41 +107,42 @@ function generateStreets() {
 }
 
 // Trees
-function generateTrees(n=200) {
-  for (let t=0; t<n; t++) {
-    const i = Math.floor(Math.random()*cols);
-    const j = Math.floor(Math.random()*rows);
-    const {x, y} = iso(i,j);
+function generateTrees(n=150){
+  for(let t=0;t<n;t++){
+    const i=Math.floor(Math.random()*cols);
+    const j=Math.floor(Math.random()*rows);
+    const {x,y}=iso(i,j);
     const tree = document.createElement('div');
-    tree.classList.add('tree');
-    tree.style.left = `${x}px`;
-    tree.style.top = `${y - 12}px`;
+    tree.className='block';
+    tree.style.width=grid+'px';
+    tree.style.height=(grid*1.5)+'px';
+    tree.style.left=`${x}px`;
+    tree.style.top=`${y-12}px`;
+    tree.style.backgroundColor='#0a5';
     city.appendChild(tree);
   }
 }
 
 // Cars
-const cars = [];
+const cars=[];
 function spawnCars(n=30){
   for(let i=0;i<n;i++){
-    const car = document.createElement('div');
-    car.classList.add('car');
-    car.style.backgroundColor = `hsl(${Math.random()*360}, 80%, 60%)`;
-    const {x,y} = iso(-Math.random()*cols, rows/2);
-    car.style.left = `${x}px`;
-    car.style.top = `${y}px`;
-    car.vx = 0.5 + Math.random();
-    car.vy = 0.25 + Math.random()/2;
+    const car=document.createElement('div');
+    car.className='car';
+    car.style.backgroundColor=`hsl(${Math.random()*360},80%,60%)`;
+    const {x,y}=iso(-Math.random()*cols,rows/2);
+    car.style.left=`${x}px`;
+    car.style.top=`${y}px`;
+    car.vx=0.5+Math.random();
+    car.vy=0.25+Math.random()/2;
     city.appendChild(car);
     cars.push(car);
   }
 }
-
-// Animate cars
 function animateCars(){
   cars.forEach(car=>{
-    let left = parseFloat(car.style.left)+car.vx;
-    let top = parseFloat(car.style.top)+car.vy;
+    let left=parseFloat(car.style.left)+car.vx;
+    let top=parseFloat(car.style.top)+car.vy;
     if(left>cityWidth+50||top>cityHeight+50){
       left=-50; top=cityHeight/4;
     }
@@ -166,7 +152,7 @@ function animateCars(){
   requestAnimationFrame(animateCars);
 }
 
-// Animate smoke
+// Smoke animation
 function animateSmoke(smoke){
   let y=parseFloat(smoke.style.top);
   let opacity=0.7;
@@ -180,16 +166,22 @@ function animateSmoke(smoke){
   rise();
 }
 
+// Random building color
+function randomColor(){
+  const colors=['#555','#777','#999','#aa5555','#55aaaa'];
+  return colors[Math.floor(Math.random()*colors.length)];
+}
+
 // Day-night cycle
 let hue=197; let day=true;
 function animateSky(){
-  if(day){ hue+=0.05; if(hue>=260) day=false; }
-  else{ hue-=0.05; if(hue<=197) day=true; }
+  if(day){ hue+=0.05;if(hue>=260)day=false;}
+  else{hue-=0.05;if(hue<=197)day=true;}
   document.body.style.background=`hsl(${hue},80%,70%)`;
   requestAnimationFrame(animateSky);
 }
 
-// Initialize city
+// Initialize
 generateBuildings();
 generateStreets();
 generateTrees();
