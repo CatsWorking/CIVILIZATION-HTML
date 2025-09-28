@@ -3,13 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Enhanced Isometric Pixel City</title>
+<title>Full-Screen Pixel City</title>
 <style>
   body {
     margin: 0;
-    background: #87ceeb; /* sky */
     overflow: hidden;
     font-family: monospace;
+    background: #87ceeb; /* sky */
   }
 
   #city {
@@ -81,13 +81,15 @@ const city = document.getElementById('city');
 const cityWidth = window.innerWidth;
 const cityHeight = window.innerHeight;
 const grid = 16;
-const rows = 15;
-const cols = 20;
+
+// Scale the city to cover the whole screen
+const cols = Math.floor(cityWidth / (grid/2));
+const rows = Math.floor(cityHeight / (grid/4) * 1.5); // stretch for isometric
 
 // Isometric conversion
 function iso(x, y) {
   const isoX = (x - y) * grid/2 + cityWidth/2;
-  const isoY = (x + y) * grid/4 + cityHeight/4;
+  const isoY = (x + y) * grid/4;
   return {x: isoX, y: isoY};
 }
 
@@ -97,7 +99,7 @@ function randomColor() {
   return colors[Math.floor(Math.random() * colors.length)];
 }
 
-// Buildings with windows and optional smoke
+// Generate buildings with windows and smoke
 function generateBuildings() {
   for (let i = 0; i < cols; i++) {
     for (let j = 0; j < rows; j++) {
@@ -121,8 +123,7 @@ function generateBuildings() {
         }
       }
 
-      // Chimney smoke
-      if (Math.random() > 0.7) {
+      if (Math.random() > 0.8) {
         const smoke = document.createElement('div');
         smoke.classList.add('smoke');
         smoke.style.left = `${x}px`;
@@ -134,7 +135,7 @@ function generateBuildings() {
   }
 }
 
-// Streets
+// Generate streets
 function generateStreets() {
   for (let i = 0; i < cols; i++) {
     for (let j = 0; j < rows; j++) {
@@ -146,8 +147,7 @@ function generateStreets() {
         street.style.top = `${y}px`;
         city.appendChild(street);
 
-        // Street light
-        if (Math.random() > 0.8) {
+        if (Math.random() > 0.85) {
           const light = document.createElement('div');
           light.classList.add('light');
           light.style.left = `${x}px`;
@@ -159,9 +159,9 @@ function generateStreets() {
   }
 }
 
-// Trees
+// Generate trees
 function generateTrees() {
-  for (let t = 0; t < 50; t++) {
+  for (let t = 0; t < 150; t++) {
     const i = Math.floor(Math.random() * cols);
     const j = Math.floor(Math.random() * rows);
     const {x, y} = iso(i, j);
@@ -175,12 +175,12 @@ function generateTrees() {
 
 // Cars
 const cars = [];
-function spawnCars(n=12) {
+function spawnCars(n=30) {
   for (let i = 0; i < n; i++) {
     const car = document.createElement('div');
     car.classList.add('car');
     car.style.backgroundColor = `hsl(${Math.random()*360}, 80%, 60%)`;
-    const {x, y} = iso(-Math.random()*20, rows/2);
+    const {x, y} = iso(-Math.random()*50, rows/2);
     car.style.left = `${x}px`;
     car.style.top = `${y}px`;
     car.vx = 0.5 + Math.random();
@@ -190,6 +190,7 @@ function spawnCars(n=12) {
   }
 }
 
+// Animate cars
 function animateCars() {
   cars.forEach(car => {
     let left = parseFloat(car.style.left) + car.vx;
@@ -204,7 +205,7 @@ function animateCars() {
   requestAnimationFrame(animateCars);
 }
 
-// Smoke animation
+// Animate smoke
 function animateSmoke(smoke) {
   let y = parseFloat(smoke.style.top);
   let opacity = 0.7;
@@ -222,12 +223,28 @@ function animateSmoke(smoke) {
   rise();
 }
 
+// Day-Night Cycle
+let hue = 197; // sky blue
+let day = true;
+function animateSky() {
+  if (day) {
+    hue += 0.05;
+    if (hue >= 260) day = false; // sunset
+  } else {
+    hue -= 0.05;
+    if (hue <= 197) day = true; // sunrise
+  }
+  document.body.style.background = `hsl(${hue}, 80%, 70%)`;
+  requestAnimationFrame(animateSky);
+}
+
 // Initialize city
 generateBuildings();
 generateStreets();
 generateTrees();
 spawnCars();
 animateCars();
+animateSky();
 </script>
 </body>
 </html>
